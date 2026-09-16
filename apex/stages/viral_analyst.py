@@ -1,12 +1,16 @@
 """VIRAL ANALYST AI: breaks a trending post into hook / pattern / story / editing / CTA / comments.
 
-Mocked heuristics stand in for an actual LLM-vision/transcript analysis pass.
+Uses Groq (free tier, see SETUP.md) to actually reason about the trend when
+`GROQ_API_KEY` is set; falls back to deterministic mock heuristics on any
+LLM error or when no key is configured, so the pipeline never breaks.
 """
 
 from __future__ import annotations
 
 import random
+import sys
 
+from .. import llm
 from ..models import AnalysisReport, TrendSignal
 
 _HOOKS = [
@@ -29,14 +33,50 @@ _COMMENT_THEMES = [
     ["relating personal story", "asking follow-up questions"],
 ]
 
+_SYSTEM_PROMPT = (
+    "You are a short-form video virality analyst. Given a trending post's metadata, "
+    "break down why it works. Reply with ONLY a JSON object with keys: "
+    "hook (string), pattern (string, e.g. '3-act reveal'), story_structure (string), "
+    "editing_notes (string), cta (string), top_comments_themes (array of 2-4 short strings), "
+    "virality_score (number 0-100). No prose, no markdown fencing."
+)
+
 
 class ViralAnalyst:
     def __init__(self, seed: int | None = None) -> None:
         self._rng = random.Random(seed)
 
     def analyze(self, signal: TrendSignal) -> AnalysisReport:
+        if llm.is_configured():
+            try:
+                return self._analyze_live(signal)
+            except llm.LLMError as exc:
+                print(f"[ViralAnalyst] Groq analysis failed, falling back to mock: {exc}", file=sys.stderr)
+        return self._analyze_mock(signal)
+
+    def _analyze_live(self, signal: TrendSignal) -> AnalysisReport:
+        user_prompt = (
+            f"Platform: {signal.platform.value}\n"
+            f"Topic: {signal.topic}\n"
+            f"Views: {signal.view_count}\n"
+            f"Velocity (views/hour): {signal.velocity:.0f}\n"
+            f"Audio/sound: {signal.audio_or_sound}"
+        )
+        data = llm.complete_json(_SYSTEM_PROMPT, user_prompt)
+        return AnalysisReport(
+            signal=signal,
+            hook=str(data["hook"]),
+            pattern=str(data["pattern"]),
+            story_structure=str(data["story_structure"]),
+            editing_notes=str(data["editing_notes"]),
+            cta=str(data["cta"]),
+            top_comments_themes=[str(t) for t in data.get("top_comments_themes", [])],
+            virality_score=float(data.get("virality_score", 50.0)),
+        )
+
+    def _analyze_mock(self, signal: TrendSignal) -> AnalysisReport:
         # Velocity is the strongest proxy we have for "this is actually working"
-        # until we plug in real engagement-rate / retention-curve data.
+        # without a live analysis pass.
         virality_score = min(100.0, (signal.velocity / 50_000) * 100)
         return AnalysisReport(
             signal=signal,

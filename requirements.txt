@@ -1,0 +1,5 @@
+# Runtime deps: none — the pipeline and its Groq/YouTube clients use only the
+# Python standard library (urllib, json) so it runs with a bare `python3`.
+#
+# Dev/test only:
+pytest
