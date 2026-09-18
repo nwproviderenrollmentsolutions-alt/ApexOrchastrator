@@ -4,13 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 import { settings } from './lib/config.js';
 import { ViralRadar } from './lib/stages/radar.js';
+import { analyzeSignal } from './lib/stages/analyst.js';
 import { chooseStrategy } from './lib/stages/strategist.js';
+import { writeScript } from './lib/stages/scriptWriter.js';
 import { buildPackage } from './lib/stages/packageBuilder.js';
 import { reviewPackage } from './lib/stages/qc.js';
 import { publish } from './lib/stages/publisher.js';
 import { measure, engagementRate } from './lib/stages/performance.js';
 import { LearningDatabase } from './lib/stages/learning.js';
 import * as youtube from './lib/youtube.js';
+import * as groq from './lib/groq.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +26,7 @@ const radar = new ViralRadar();
 const learningDb = new LearningDatabase();
 
 app.get('/api/config', (req, res) => {
-  res.json({ youtubeLive: youtube.isConfigured() });
+  res.json({ youtubeLive: youtube.isConfigured(), groqLive: groq.isConfigured() });
 });
 
 app.post('/api/scan', async (req, res) => {
@@ -36,10 +39,30 @@ app.post('/api/scan', async (req, res) => {
   }
 });
 
+app.post('/api/analyze', async (req, res) => {
+  const { signal } = req.body || {};
+  if (!signal) return res.status(400).json({ error: 'signal is required' });
+  try {
+    res.json({ analysis: await analyzeSignal(signal) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/strategize', (req, res) => {
   const { signal, analysis, productContext } = req.body || {};
   if (!signal || !analysis) return res.status(400).json({ error: 'signal and analysis are required' });
   res.json({ strategy: chooseStrategy(signal, analysis, productContext) });
+});
+
+app.post('/api/script', async (req, res) => {
+  const { strategy } = req.body || {};
+  if (!strategy) return res.status(400).json({ error: 'strategy is required' });
+  try {
+    res.json({ script: await writeScript(strategy) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/package', (req, res) => {
@@ -91,4 +114,5 @@ app.get('/api/state', (req, res) => {
 app.listen(settings.port, () => {
   console.log(`ApexOrchastrator dashboard running at http://localhost:${settings.port}`);
   console.log(`YouTube live trends: ${youtube.isConfigured() ? 'ON' : 'off (set YOUTUBE_API_KEY in web/.env)'}`);
+  console.log(`Groq live AI: ${groq.isConfigured() ? 'ON' : 'off (set GROQ_API_KEY in web/.env)'}`);
 });

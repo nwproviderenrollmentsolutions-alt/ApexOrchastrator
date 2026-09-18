@@ -1,16 +1,13 @@
 # Getting set up
 
-There are two runnable surfaces in this repo:
+There are two runnable surfaces in this repo — **`web/`** (a Node dashboard)
+and **root** (`main.py`, a Python CLI) — sharing the same two optional free
+keys. Neither surface needs any key to run; both fall back to mocked data
+with zero setup.
 
-- **`web/`** — a Node/Express dashboard. AI (analysis + script writing) runs
-  via **Puter.js in the browser — no API key at all**, just a free Puter.com
-  account (created automatically on first use). This is the one to run if
-  you want a live, clickable project today.
-- **root (`main.py`)** — the original Python CLI, using Groq for AI.
+## 1. Run something right now (no keys required)
 
-Both share the same free YouTube Data API key for real trend data.
-
-## 1. Run the web dashboard (no keys required)
+Web dashboard:
 
 ```bash
 cd web
@@ -18,19 +15,30 @@ npm install
 npm start
 ```
 
-Open http://localhost:3000, click **Run cycle**. The first AI call pops up a
-Puter.com login/signup (free, no credit card) — after that it just works.
-Everything else (radar, strategy, QC, publish, performance, learning loop)
-runs on the local server with zero setup.
+Open http://localhost:3000, click **Run cycle**.
 
-If Puter.js is blocked, offline, or the viewer declines the popup, that
-stage falls back to a local mocked analysis/script automatically — the
-dashboard never breaks, it just stops being "live" for that step.
+Python CLI:
 
-## 2. (Optional) Add real YouTube Shorts trend data
+```bash
+python3 main.py --cycles 1 --signals-per-scan 5 --product "your product"
+```
 
-Free tier, no credit card required for the free quota. Powers the Viral
-Radar in **both** the web dashboard and the Python CLI.
+## 2. Groq (LLM — powers the Analyst + script-writing stages, both surfaces)
+
+Free tier, no credit card required.
+
+1. Go to https://console.groq.com/keys
+2. Sign in (Google/GitHub/email) and click **Create API Key**
+3. Copy the key (starts with `gsk_...`)
+
+**Free tier limits** (subject to change, check https://console.groq.com/settings/limits
+after signing in): generous per-minute/per-day request and token caps on
+models like `llama-3.1-8b-instant`. If you hit a rate limit mid-run, that
+stage just falls back to mocked analysis/script for that item.
+
+## 3. YouTube Data API v3 (real trending Shorts for Viral Radar, both surfaces)
+
+Free tier, no credit card required for the free quota.
 
 1. Go to https://console.cloud.google.com/apis/library/youtube.googleapis.com
 2. Create a project if you don't have one, then click **Enable**
@@ -44,30 +52,29 @@ Radar in **both** the web dashboard and the Python CLI.
 hitting quota. TikTok and Instagram have no comparable free public trend
 API, so those two platforms stay mocked regardless of this key.
 
-Wire it in:
+## 4. Wire them in
+
+Web dashboard:
 
 ```bash
 cd web
 cp .env.example .env
-# edit .env, paste in YOUTUBE_API_KEY
+# edit .env, paste in GROQ_API_KEY and/or YOUTUBE_API_KEY
 npm start
 ```
 
-`.env` is gitignored — your key never gets committed.
+Python CLI:
 
-## 3. (Optional) Run the original Python CLI instead
+```bash
+cp .env.example .env
+# edit .env, paste in GROQ_API_KEY and/or YOUTUBE_API_KEY
+python3 main.py --cycles 2 --signals-per-scan 5 --product "your product"
+```
 
-Uses Groq (free tier) for AI instead of Puter.js, and the same YouTube key.
+Each `.env` is gitignored — your keys never get committed. Drop `--seed`
+on the CLI once you have live keys, since a fixed seed only pins the
+mocked RNG paths, not live LLM/YouTube results.
 
-1. Go to https://console.groq.com/keys, sign in, click **Create API Key**
-   (starts with `gsk_...`). Free tier, no credit card.
-2. From the repo root:
-   ```bash
-   cp .env.example .env
-   # edit .env, paste in GROQ_API_KEY and/or YOUTUBE_API_KEY
-   python3 main.py --cycles 1 --signals-per-scan 5 --product "your product"
-   ```
-
-If a live call fails (rate limit, bad key, network), it logs a warning to
-stderr/console and falls back to mocked data for that item — a bad key
+If a live call fails (rate limit, bad key, network), it logs a warning
+(console/stderr) and falls back to mocked data for that item — a bad key
 never crashes a run, in either surface.

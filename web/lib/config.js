@@ -28,5 +28,7 @@ loadDotenv(envPath);
 export const settings = {
   youtubeApiKey: process.env.YOUTUBE_API_KEY || null,
   youtubeRegion: process.env.YOUTUBE_REGION || 'US',
+  groqApiKey: process.env.GROQ_API_KEY || null,
+  groqModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
   port: Number(process.env.PORT) || 3000,
 };
