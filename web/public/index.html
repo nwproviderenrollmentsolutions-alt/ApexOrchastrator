@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ApexOrchastrator</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://js.puter.com/v2/"></script>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div>
+      <h1>ApexOrchastrator</h1>
+      <p class="subtitle">Viral radar &rarr; AI analysis &rarr; script &rarr; QC &rarr; publish &rarr; learn</p>
+    </div>
+    <div class="status-pills" id="status-pills">
+      <span class="pill" id="pill-youtube">YouTube: checking…</span>
+      <span class="pill" id="pill-puter">Puter.js: checking…</span>
+    </div>
+  </header>
+
+  <section class="controls">
+    <label>
+      Product / angle
+      <input id="product-input" type="text" value="our product" />
+    </label>
+    <label>
+      Signals per cycle
+      <input id="limit-input" type="number" min="1" max="10" value="4" />
+    </label>
+    <button id="run-btn">Run cycle</button>
+    <span class="run-state" id="run-state"></span>
+  </section>
+
+  <section class="tiles" id="tiles">
+    <div class="tile">
+      <div class="tile-label">Published</div>
+      <div class="tile-value" id="tile-published">0</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Rejected</div>
+      <div class="tile-value" id="tile-rejected">0</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Avg hook score</div>
+      <div class="tile-value" id="tile-hookscore">&mdash;</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Winning topics</div>
+      <div class="tile-value" id="tile-winning">0</div>
+    </div>
+  </section>
+
+  <section class="chart-card">
+    <h2>Views by platform</h2>
+    <svg id="platform-chart" class="chart" viewBox="0 0 560 140" role="img" aria-label="Total views by platform"></svg>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <h2>Activity log</h2>
+      <div class="log" id="log"></div>
+    </div>
+    <div class="card">
+      <h2>Recent items</h2>
+      <table class="items-table">
+        <thead>
+          <tr><th>Title</th><th>Platform</th><th>Status</th><th>Hook</th><th>Engagement</th></tr>
+        </thead>
+        <tbody id="items-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
