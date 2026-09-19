@@ -13,6 +13,12 @@ Skip straight to UGC Creator with a hand-built brief:
 --niche is mutually exclusive with --brief/--topic: it runs Viral Radar ->
 Viral Analyst AI -> Content Strategist to build the brief for you, instead
 of you supplying one directly.
+
+Once a run has actually published and had time to accumulate real
+analytics (hours/days later, not immediately), close the loop:
+    python -m apex_orchestrator.cli --collect-performance <run_id>
+This runs Performance Engine -> Learning Database, so future --niche runs
+in the same niche can learn which framework performed best.
 """
 
 from __future__ import annotations
@@ -27,7 +33,7 @@ from rich.console import Console
 
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.contracts import ContentBrief
-from apex_orchestrator.pipeline import run_full_pipeline, run_pipeline
+from apex_orchestrator.pipeline import collect_performance_for_run, run_full_pipeline, run_pipeline
 
 console = Console()
 
@@ -64,10 +70,22 @@ def main() -> None:
     parser.add_argument("--disclosure", action="store_true", help="mark this content as sponsored/ad")
     parser.add_argument("--max-duration", type=int, default=45, dest="max_duration")
     parser.add_argument("--skip-qc-gate", action="store_true", help="publish even if QC fails (debugging only)")
+    parser.add_argument(
+        "--collect-performance",
+        metavar="RUN_ID",
+        help="Performance Engine -> Learning Database for a run that already published",
+    )
     args = parser.parse_args()
 
+    if args.collect_performance:
+        snapshots = collect_performance_for_run(args.collect_performance)
+        console.print(f"[bold]Collected {len(snapshots)} performance snapshot(s)[/bold] for run {args.collect_performance}")
+        for s in snapshots:
+            console.print(f"  {s.platform}: views={s.views} shares={s.shares} saves={s.saves} comments={s.comments}")
+        return
+
     if not (args.niche or args.brief or args.topic):
-        console.print("[red]One of --niche, --brief, or --topic is required.[/red]")
+        console.print("[red]One of --niche, --brief, --topic, or --collect-performance is required.[/red]")
         sys.exit(1)
 
     console.print("[bold]Active integrations:[/bold]")
@@ -100,6 +118,8 @@ def main() -> None:
     with open(summary_path, "w") as f:
         json.dump(
             {
+                "niche": result.niche,
+                "framework": result.framework,
                 "brief": asdict(result.brief),
                 "qc_report": asdict(result.qc_report),
                 "publish_results": [asdict(p) for p in result.publish_results],
@@ -109,6 +129,11 @@ def main() -> None:
             indent=2,
         )
     console.print(f"Summary written to {summary_path}")
+    if any(p.status == "published" for p in result.publish_results):
+        console.print(
+            f"Once analytics have had time to accumulate, run: "
+            f"python -m apex_orchestrator.cli --collect-performance {result.run_id}"
+        )
 
 
 if __name__ == "__main__":

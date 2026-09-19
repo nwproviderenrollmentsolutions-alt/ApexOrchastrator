@@ -8,32 +8,9 @@ one-time consent flow; the refresh token is cached at YOUTUBE_TOKEN_FILE.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.contracts import ContentBrief, PublishResult, Script
-
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-
-
-def _get_credentials():
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-
-    token_path = Path(CONFIG.youtube_token_file)
-    creds = None
-    if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CONFIG.youtube_client_secrets_file, SCOPES)
-            creds = flow.run_local_server(port=0)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(creds.to_json())
-    return creds
+from apex_orchestrator.google_auth import get_credentials
 
 
 def publish(video_path: str, script: Script, brief: ContentBrief) -> PublishResult:
@@ -48,7 +25,7 @@ def publish(video_path: str, script: Script, brief: ContentBrief) -> PublishResu
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaFileUpload
 
-        creds = _get_credentials()
+        creds = get_credentials()
         youtube = build("youtube", "v3", credentials=creds)
 
         title = (script.hook or brief.topic)[:95] + " #shorts"

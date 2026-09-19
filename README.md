@@ -1,11 +1,11 @@
 # ApexOrchastrator
 
-Faceless short-form content automation, built entirely on free-tier services:
+Faceless short-form content automation, built entirely on free-tier services —
+the full loop, all 8 stages:
+
 Viral Radar → Viral Analyst AI → Content Strategist → UGC Creator AI → Quality
-Control → Publish. That's six of the full 8-stage pipeline; Performance Engine
-and Learning Database (feeding results back into the next Radar pass) are
-documented as data contracts in `apex_orchestrator/contracts.py` so they can be
-plugged in without touching this code.
+Control → Publish → Performance Engine → Learning Database → *(back into the
+next Content Strategist run)*
 
 ## What it does
 
@@ -18,8 +18,10 @@ Given a niche (e.g. `"budget travel"`):
    hook pattern, content framework (listicle / myth-vs-fact / tutorial /
    storytime / before-after / problem-agitate-solve), editing notes, CTA
    style, predicted comment themes.
-3. **Content Strategist** — picks the framework and builds a `ContentBrief`
-   (topic, angle, CTA, claims, target platforms, product tie-in).
+3. **Content Strategist** — picks the framework (deferring to the Learning
+   Database's judgment once it has enough history for this niche — see step 8)
+   and builds a `ContentBrief` (topic, angle, CTA, claims, target platforms,
+   product tie-in).
 4. **UGC Creator AI** — writes a script, synthesizes a faceless voiceover,
    sources 9:16 B-roll, builds animated captions, and renders a final MP4.
 5. **Quality Control** — scores the hook, scans for brand-unsafe language,
@@ -27,12 +29,26 @@ Given a niche (e.g. `"budget travel"`):
    Failing QC blocks Publish.
 6. **Publish** — posts to YouTube Shorts, TikTok, and/or Instagram Reels via
    each platform's official free API.
+7. **Performance Engine** — *(run separately, later — see below)* pulls real
+   views/watch-time/shares/saves/comments from each platform's free analytics
+   endpoint for a post that already published.
+8. **Learning Database** — records every run and its performance in a local
+   SQLite database, and once a framework has enough data points for a niche,
+   Content Strategist starts preferring it over the Analyst's title-pattern
+   guess. This is the feedback loop that closes the pipeline.
 
 You can also skip straight to step 4 with a hand-written brief (see
 **Running it** below) if you don't want automated trend research.
 
 Every stage reports through a shared event bus, visible live in the terminal and
 in a local browser dashboard.
+
+## Why Performance Engine is a separate step
+
+Steps 1–6 run as one pipeline invocation. Step 7 doesn't, on purpose: platform
+analytics for a just-published post aren't populated for hours, so collecting
+performance is a second command you run later (see **Running it**), not
+something bolted onto the end of publish.
 
 ## Free services used
 
@@ -44,9 +60,10 @@ in a local browser dashboard.
 | Voiceover | [edge-tts](https://github.com/rany2/edge-tts) | Yes, no key needed |
 | B-roll | [Pexels API](https://www.pexels.com/api) | Yes |
 | Video rendering | ffmpeg | Yes, local binary |
-| YouTube Shorts publish | [YouTube Data API v3](https://console.cloud.google.com) (OAuth) | Yes, daily quota |
-| TikTok publish | [Content Posting API](https://developers.tiktok.com) | Yes, developer account |
-| Instagram Reels publish | [Graph API](https://developers.facebook.com) | Yes, Business account |
+| YouTube Shorts publish + analytics | [YouTube Data/Analytics API v3](https://console.cloud.google.com) (OAuth) | Yes, daily quota |
+| TikTok publish + analytics | [Content Posting API](https://developers.tiktok.com) | Yes, developer account |
+| Instagram Reels publish + insights | [Graph API](https://developers.facebook.com) | Yes, Business account |
+| Learning Database | SQLite (Python stdlib) | Yes, no service at all |
 
 **Nothing here requires a paid key.** Any integration you skip just runs in an
 offline/mock mode instead of crashing — the terminal and dashboard say so
@@ -101,14 +118,29 @@ python -m apex_orchestrator.cli --brief brief.json
 ```
 
 Each run gets an id and writes everything to `runs/<run_id>/`: rendered assets,
-`events.jsonl` (the full event log), and `summary.json` (QC + publish results).
+`events.jsonl` (the full event log), and `summary.json` (niche, framework, QC,
+and publish results).
+
+Once a published post has had time to accumulate real analytics (hours/days
+later), close the loop:
+
+```bash
+python -m apex_orchestrator.cli --collect-performance <run_id>
+```
+
+This runs Performance Engine (pulls views/shares/saves/comments from whichever
+platforms actually published) and Learning Database (records the run +
+performance to `runs/learning.db`). Run this after enough `--niche` runs in the
+same niche, and Content Strategist starts choosing the framework the data
+actually supports instead of the Analyst's title-pattern guess.
 
 ### Watching it run
 
 - **Terminal**: a live `rich` table updates in place as each stage runs — no setup.
 - **Browser**: `python -m apex_orchestrator.dashboard`, then open
   `http://127.0.0.1:8765` and pick a run from the dropdown. It polls the same
-  event log, so it works for runs in progress or already finished.
+  event log, so it works for runs in progress or already finished, and a later
+  `--collect-performance` run for the same run_id appends to the same log.
 
 ## Project layout
 
@@ -118,39 +150,44 @@ apex_orchestrator/
   config.py                 # env-driven config, reports which integrations are active
   events.py                  # event bus: rich terminal live view + JSONL log
   llm.py                      # Groq wrapper, raises LLMUnavailable if unconfigured
-  pipeline.py                  # top-level orchestrator: run_pipeline() / run_full_pipeline()
-  cli.py                        # entrypoint
-  dashboard.py                   # FastAPI live dashboard
-  viral_radar/                    # Google Trends + YouTube trending signals
-  viral_analyst/                   # trend-title analysis -> hook/framework/CTA takeaways
-  content_strategist/               # framework selection -> ContentBrief
-  ugc_creator/                       # script, voiceover, broll, captions, ffmpeg assembly
-  quality_control/                    # hook score, brand safety, disclosure, copyright
-  publish/                             # youtube / tiktok / instagram clients
-tests/                                  # offline-testable logic (no network/ffmpeg/keys needed)
+  google_auth.py               # shared YouTube OAuth (upload + analytics scopes)
+  pipeline.py                   # top-level orchestrator: run_pipeline() / run_full_pipeline() / collect_performance_for_run()
+  cli.py                         # entrypoint
+  dashboard.py                    # FastAPI live dashboard
+  viral_radar/                     # Google Trends + YouTube trending signals
+  viral_analyst/                    # trend-title analysis -> hook/framework/CTA takeaways
+  content_strategist/                # framework selection (Analyst take, or Learning DB override) -> ContentBrief
+  ugc_creator/                        # script, voiceover, broll, captions, ffmpeg assembly
+  quality_control/                     # hook score, brand safety, disclosure, copyright
+  publish/                              # youtube / tiktok / instagram clients
+  performance_engine/                    # youtube / tiktok / instagram analytics fetchers
+  learning_database/                      # SQLite store + framework leaderboard
+tests/                                     # offline-testable logic (no network/ffmpeg/keys needed)
 ```
 
 ## Notes on the publish stage
 
-- **YouTube**: uses OAuth (installed-app flow); the first run opens a browser for
-  one-time consent, then caches a refresh token. Its read-only trending lookup
-  in Viral Radar uses a separate, simpler `YOUTUBE_API_KEY` (no OAuth).
+- **YouTube**: uses OAuth (installed-app flow, scopes cover both upload and
+  read-only analytics); the first run opens a browser for one-time consent,
+  then caches a refresh token. Viral Radar's trending-video lookup uses a
+  separate, simpler `YOUTUBE_API_KEY` (no OAuth).
 - **TikTok**: unaudited developer apps publish to the account's private drafts
   only (`privacy_level: SELF_ONLY` in `publish/tiktok.py`) — flip it once your app
-  passes TikTok's review.
+  passes TikTok's review. Performance Engine's `video/query/` call targets the
+  documented v2 shape as of writing; TikTok's API has shifted before, so verify
+  against current docs if it starts failing.
 - **Instagram**: the Graph API fetches video from a public URL rather than
   accepting a direct upload, so `IG_PUBLIC_VIDEO_BASE_URL` must point somewhere
   the rendered `.mp4` is already reachable.
 
 ## Not yet built
 
-`Performance Engine` and `Learning Database` (downstream of Publish, feeding
-back into the next Viral Radar pass) are only sketched as a `PerformanceSnapshot`
-data contract in `contracts.py`. The natural next step is a poller that pulls
-each platform's analytics API on a schedule, and a small store that lets
-Content Strategist weight framework choices by what actually performed.
-
 Viral Analyst AI currently reasons over trending *titles*, not full video
 content — a deeper version could download and watch top-performing videos
 (e.g. with `yt-dlp` + Whisper, similar to this environment's `watch` skill) for
 real hook/pacing/editing breakdowns instead of title-pattern inference.
+
+Learning Database currently only feeds framework choice back into Content
+Strategist. It could also inform Viral Radar directly (e.g. deprioritize
+niches with consistently weak performance) — the data's already there in
+`runs/learning.db`, just not consumed by that stage yet.

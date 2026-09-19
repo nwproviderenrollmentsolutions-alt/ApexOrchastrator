@@ -1,11 +1,17 @@
 """Top-level orchestrator.
 
-Two entry points:
+Two entry points to generate + publish content:
 - `run_pipeline(brief)`: ContentBrief -> UGC Creator -> QC -> Publish. Use
   this when you already have a brief (hand-written, loaded from JSON, or
   from your own upstream stage).
 - `run_full_pipeline(niche, ...)`: the whole loop, Viral Radar -> Viral
   Analyst AI -> Content Strategist -> [same three stages as above].
+
+Plus one to close the loop after the fact:
+- `collect_performance_for_run(run_id)`: Performance Engine -> Learning
+  Database, for a run that already published. Analytics aren't available
+  right after publishing, so this is meant to run later (hours/days), as
+  its own step -- see `--collect-performance` in cli.py.
 
 QC is a hard gate: if a rendered asset fails Quality Control, the run stops
 before Publish and the failure reasons are reported through the event bus.
@@ -13,14 +19,17 @@ before Publish and the failure reasons are reported through the event bus.
 
 from __future__ import annotations
 
+import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.content_strategist.pipeline import run_content_strategist
-from apex_orchestrator.contracts import ContentBrief, PublishResult, QCReport, RenderedAsset
+from apex_orchestrator.contracts import ContentBrief, PerformanceSnapshot, PublishResult, QCReport, RenderedAsset
 from apex_orchestrator.events import EventBus
+from apex_orchestrator.learning_database.pipeline import run_learning_database
+from apex_orchestrator.performance_engine.pipeline import run_performance_engine
 from apex_orchestrator.publish.pipeline import run_publish
 from apex_orchestrator.quality_control.pipeline import run_quality_control
 from apex_orchestrator.ugc_creator.pipeline import run_ugc_creator
@@ -35,9 +44,11 @@ class PipelineResult:
     qc_report: QCReport
     publish_results: list[PublishResult]
     run_id: str
+    niche: str
+    framework: str
 
 
-def _execute_from_brief(brief: ContentBrief, bus: EventBus, skip_qc_gate: bool) -> PipelineResult:
+def _execute_from_brief(brief: ContentBrief, framework: str, bus: EventBus, skip_qc_gate: bool) -> PipelineResult:
     work_dir = Path(CONFIG.runs_dir) / bus.run_id / "assets"
 
     asset = run_ugc_creator(brief, work_dir, bus)
@@ -65,13 +76,15 @@ def _execute_from_brief(brief: ContentBrief, bus: EventBus, skip_qc_gate: bool) 
         qc_report=qc_report,
         publish_results=publish_results,
         run_id=bus.run_id,
+        niche=brief.topic,
+        framework=framework,
     )
 
 
 def run_pipeline(brief: ContentBrief, skip_qc_gate: bool = False) -> PipelineResult:
     bus = EventBus()
     try:
-        return _execute_from_brief(brief, bus, skip_qc_gate)
+        return _execute_from_brief(brief, "manual", bus, skip_qc_gate)
     finally:
         bus.stop()
 
@@ -91,7 +104,7 @@ def run_full_pipeline(
     try:
         signals = run_viral_radar(niche, bus)
         analysis = run_viral_analyst(niche, signals, bus)
-        brief = run_content_strategist(
+        brief, framework = run_content_strategist(
             uuid.uuid4().hex[:8],
             niche,
             analysis,
@@ -103,6 +116,32 @@ def run_full_pipeline(
             disclosure_required=disclosure_required,
             max_duration_sec=max_duration_sec,
         )
-        return _execute_from_brief(brief, bus, skip_qc_gate)
+        return _execute_from_brief(brief, framework, bus, skip_qc_gate)
     finally:
         bus.stop()
+
+
+def collect_performance_for_run(run_id: str) -> list[PerformanceSnapshot]:
+    """Performance Engine -> Learning Database for a run that already
+    published. Reuses that run's event log (a fresh, non-live EventBus
+    bound to the same run_id) so the dashboard shows this as a later
+    chapter of the same run instead of a disconnected one.
+    """
+    summary_path = Path(CONFIG.runs_dir) / run_id / "summary.json"
+    summary = json.loads(summary_path.read_text())
+
+    publish_results = [PublishResult(**p) for p in summary["publish_results"]]
+    niche = summary["niche"]
+    framework = summary["framework"]
+    brief_id = summary["brief"]["brief_id"]
+
+    bus = EventBus(run_id=run_id, live_console=False)
+    try:
+        snapshots = run_performance_engine(publish_results, bus)
+        run_learning_database(run_id, niche, framework, brief_id, snapshots, bus)
+    finally:
+        bus.stop()
+
+    summary["performance_snapshots"] = [asdict(s) for s in snapshots]
+    summary_path.write_text(json.dumps(summary, indent=2))
+    return snapshots

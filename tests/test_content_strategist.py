@@ -43,3 +43,15 @@ def test_build_brief_includes_product_name_in_angle():
 def test_build_brief_defaults_platforms_when_none_given():
     brief = build_brief("id1", "budget travel", _analysis())
     assert brief.target_platforms == ["youtube_shorts"]
+
+
+def test_learned_framework_overrides_analyst_pattern():
+    framework = select_framework(_analysis("listicle"), learned_framework="storytime")
+    assert framework.framework == "storytime"
+    assert "learning database" in framework.angle
+
+
+def test_no_override_note_when_learned_matches_analyst():
+    framework = select_framework(_analysis("listicle"), learned_framework="listicle")
+    assert framework.framework == "listicle"
+    assert "learning database" not in framework.angle

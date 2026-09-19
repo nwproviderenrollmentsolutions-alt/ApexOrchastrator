@@ -72,18 +72,24 @@ def publish(video_path: str, script: Script, brief: ContentBrief) -> PublishResu
         upload_resp.raise_for_status()
 
         status = "PROCESSING_UPLOAD"
+        status_data: dict = {}
         for _ in range(10):
             time.sleep(2)
             status_resp = requests.post(
                 STATUS_URL, headers=headers, json={"publish_id": publish_id}, timeout=30
             )
             status_resp.raise_for_status()
-            status = status_resp.json()["data"]["status"]
+            status_data = status_resp.json()["data"]
+            status = status_data["status"]
             if status in ("PUBLISH_COMPLETE", "FAILED"):
                 break
 
         if status == "PUBLISH_COMPLETE":
-            return PublishResult(platform="tiktok", status="published", remote_id=publish_id)
+            # Once published, TikTok exposes the platform-visible post id here;
+            # analytics lookups need this, not the ephemeral publish_id.
+            post_ids = status_data.get("publicaly_available_post_id") or []
+            remote_id = post_ids[0] if post_ids else publish_id
+            return PublishResult(platform="tiktok", status="published", remote_id=remote_id)
         return PublishResult(platform="tiktok", status="failed", remote_id=publish_id, error=f"final status: {status}")
 
     except Exception as e:  # noqa: BLE001 - publish failures must never crash the run

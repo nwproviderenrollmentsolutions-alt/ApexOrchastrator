@@ -48,6 +48,8 @@ STAGE_ORDER = [
     "publish.youtube_shorts",
     "publish.tiktok",
     "publish.instagram",
+    "performance.collect",
+    "learning.record",
 ]
 
 

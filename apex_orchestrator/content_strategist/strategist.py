@@ -20,10 +20,19 @@ FRAMEWORK_LABELS = {
 }
 
 
-def select_framework(analysis: AnalysisReport) -> ContentFramework:
-    label = FRAMEWORK_LABELS.get(analysis.content_pattern, "Problem-Agitate-Solve")
+def select_framework(analysis: AnalysisReport, learned_framework: str | None = None) -> ContentFramework:
+    """`learned_framework` is what the Learning Database says has actually
+    performed best for this niche in past runs. When there's enough history
+    to trust it, it overrides the Analyst's title-pattern guess -- that's
+    the feedback loop from Performance Engine / Learning Database back into
+    Content Strategist.
+    """
+    pattern = learned_framework or analysis.content_pattern
+    label = FRAMEWORK_LABELS.get(pattern, "Problem-Agitate-Solve")
     angle = f"{label} format built around what's working in {analysis.niche!r} right now: {analysis.hook_pattern}"
-    return ContentFramework(framework=analysis.content_pattern, angle=angle)
+    if learned_framework and learned_framework != analysis.content_pattern:
+        angle += f" (learning database: {label} has outperformed for this niche)"
+    return ContentFramework(framework=pattern, angle=angle)
 
 
 def build_brief(
@@ -36,8 +45,9 @@ def build_brief(
     key_claims: list[str] | None = None,
     disclosure_required: bool = False,
     max_duration_sec: int = 45,
+    learned_framework: str | None = None,
 ) -> ContentBrief:
-    framework = select_framework(analysis)
+    framework = select_framework(analysis, learned_framework)
     angle = framework.angle
     if product_name:
         angle += f", featuring {product_name}"
