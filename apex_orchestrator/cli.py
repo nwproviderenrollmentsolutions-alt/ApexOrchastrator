@@ -1,13 +1,18 @@
 """CLI entrypoint.
 
+Full loop, starting from Viral Radar:
+    python -m apex_orchestrator.cli --niche "budget travel" --product "..." \\
+        --cta "..." --platforms youtube_shorts,tiktok
+
+Skip straight to UGC Creator with a hand-built brief:
     python -m apex_orchestrator.cli --topic "..." --angle "..." --cta "..." \\
         --platforms youtube_shorts,tiktok
 
     python -m apex_orchestrator.cli --brief path/to/brief.json
 
-Until the Viral Radar / Analyst / Strategist stages exist, a ContentBrief
-is either built from flags or loaded from a JSON file shaped like
-ContentBrief's fields (see contracts.py).
+--niche is mutually exclusive with --brief/--topic: it runs Viral Radar ->
+Viral Analyst AI -> Content Strategist to build the brief for you, instead
+of you supplying one directly.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from rich.console import Console
 
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.contracts import ContentBrief
-from apex_orchestrator.pipeline import run_pipeline
+from apex_orchestrator.pipeline import run_full_pipeline, run_pipeline
 
 console = Console()
 
@@ -32,10 +37,6 @@ def _load_brief(args: argparse.Namespace) -> ContentBrief:
         data = json.loads(open(args.brief).read())
         data.setdefault("brief_id", uuid.uuid4().hex[:8])
         return ContentBrief(**data)
-
-    if not args.topic:
-        console.print("[red]Either --brief or --topic is required.[/red]")
-        sys.exit(1)
 
     return ContentBrief(
         brief_id=uuid.uuid4().hex[:8],
@@ -51,10 +52,11 @@ def _load_brief(args: argparse.Namespace) -> ContentBrief:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="ApexOrchastrator: UGC Creator -> QC -> Publish")
-    parser.add_argument("--brief", help="path to a ContentBrief JSON file")
-    parser.add_argument("--topic")
-    parser.add_argument("--angle")
+    parser = argparse.ArgumentParser(description="ApexOrchastrator: Viral Radar -> ... -> Publish")
+    parser.add_argument("--niche", help="run the full loop starting at Viral Radar, e.g. 'budget travel'")
+    parser.add_argument("--brief", help="path to a ContentBrief JSON file (skips Radar/Analyst/Strategist)")
+    parser.add_argument("--topic", help="build a brief directly (skips Radar/Analyst/Strategist)")
+    parser.add_argument("--angle", help="only used with --topic")
     parser.add_argument("--cta")
     parser.add_argument("--claims", help="pipe-separated key claims, e.g. 'fact one|fact two'")
     parser.add_argument("--product")
@@ -64,14 +66,29 @@ def main() -> None:
     parser.add_argument("--skip-qc-gate", action="store_true", help="publish even if QC fails (debugging only)")
     args = parser.parse_args()
 
-    brief = _load_brief(args)
+    if not (args.niche or args.brief or args.topic):
+        console.print("[red]One of --niche, --brief, or --topic is required.[/red]")
+        sys.exit(1)
 
     console.print("[bold]Active integrations:[/bold]")
     for name, active in CONFIG.integration_summary().items():
         console.print(f"  {'[green]on[/green] ' if active else '[dim]off[/dim]'} {name}")
     console.print()
 
-    result = run_pipeline(brief, skip_qc_gate=args.skip_qc_gate)
+    if args.niche:
+        result = run_full_pipeline(
+            args.niche,
+            product_name=args.product,
+            cta=args.cta,
+            platforms=args.platforms.split(",") if args.platforms else None,
+            key_claims=args.claims.split("|") if args.claims else None,
+            disclosure_required=args.disclosure,
+            max_duration_sec=args.max_duration,
+            skip_qc_gate=args.skip_qc_gate,
+        )
+    else:
+        brief = _load_brief(args)
+        result = run_pipeline(brief, skip_qc_gate=args.skip_qc_gate)
 
     console.print()
     console.print(f"[bold]Run {result.run_id}[/bold] -- events at runs/{result.run_id}/events.jsonl")

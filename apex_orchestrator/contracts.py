@@ -1,11 +1,11 @@
 """Data contracts shared across pipeline stages.
 
 The full pipeline has 8 stages (see README architecture diagram). This
-codebase implements three of them end-to-end: UGC Creator AI, Quality
-Control, and Publish. The remaining stages (Viral Radar, Viral Analyst AI,
-Content Strategist, Performance Engine, Learning Database) are represented
-here only as the data contracts a future implementation must produce or
-consume, so they can be plugged in without touching the stages below.
+codebase implements six of them end-to-end: Viral Radar, Viral Analyst AI,
+Content Strategist, UGC Creator AI, Quality Control, and Publish.
+Performance Engine and Learning Database are represented here only as the
+data contracts a future implementation must produce or consume, so they
+can be plugged in without touching the stages below.
 """
 
 from __future__ import annotations
@@ -15,7 +15,54 @@ from typing import Optional
 
 
 # ---------------------------------------------------------------------------
-# Upstream contracts (produced by stages not yet implemented)
+# Viral Radar
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TrendSignal:
+    """One trend observation for a niche, from a single source."""
+
+    niche: str
+    source: str  # "google_trends" | "youtube_trending" | "offline_fallback"
+    velocity_score: float  # 0-1, higher = faster-rising
+    sample_titles: list[str] = field(default_factory=list)
+    region: str = "US"
+
+
+# ---------------------------------------------------------------------------
+# Viral Analyst AI
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AnalysisReport:
+    """What's working right now for a niche, distilled from TrendSignals."""
+
+    niche: str
+    hook_pattern: str
+    content_pattern: str  # e.g. "listicle", "myth_vs_fact", "storytime"
+    editing_notes: str
+    cta_style: str
+    predicted_comment_themes: list[str]
+    used_llm: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Content Strategist
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ContentFramework:
+    """The chosen structure + product angle, before scripting."""
+
+    framework: str
+    angle: str
+
+
+# ---------------------------------------------------------------------------
+# Upstream-of-UGC-Creator contract
 # ---------------------------------------------------------------------------
 
 
@@ -23,9 +70,9 @@ from typing import Optional
 class ContentBrief:
     """Handoff from Content Strategist -> UGC Creator AI.
 
-    This is the entry point for the implemented part of the pipeline. Until
-    Viral Radar / Analyst / Strategist are built, callers construct this by
-    hand or load it from a JSON file (see cli.py --brief).
+    Built by `content_strategist.build_brief()` from an AnalysisReport, or
+    constructed by hand / loaded from JSON (see cli.py --brief) to run the
+    downstream stages standalone.
     """
 
     brief_id: str

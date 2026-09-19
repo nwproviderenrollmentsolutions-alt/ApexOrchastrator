@@ -18,7 +18,7 @@ given hook line for scroll-stopping power on a 0.0-1.0 scale, considering: \
 curiosity gap, specificity, pattern interrupt, and whether it front-loads \
 value. Return strict JSON: {"score": <float 0-1>, "reasons": [<string>, ...]}."""
 
-_PATTERNS = {
+HOOK_PATTERNS = {
     r"^(stop|wait|don'?t)\b": "opens with a pattern-interrupt command",
     r"\?\s*$": "ends on a question, opens a curiosity gap",
     r"\b\d+\b": "uses a specific number",
@@ -32,7 +32,7 @@ def _heuristic_score(hook: str) -> tuple[float, list[str]]:
     reasons: list[str] = []
     score = 0.15  # baseline
 
-    for pattern, reason in _PATTERNS.items():
+    for pattern, reason in HOOK_PATTERNS.items():
         if re.search(pattern, hook_l):
             score += 0.18
             reasons.append(reason)

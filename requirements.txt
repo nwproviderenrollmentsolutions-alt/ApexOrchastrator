@@ -1,5 +1,6 @@
 requests>=2.31
 python-dotenv>=1.0
+pytrends>=4.9
 rich>=13.7
 edge-tts>=6.1
 fastapi>=0.110

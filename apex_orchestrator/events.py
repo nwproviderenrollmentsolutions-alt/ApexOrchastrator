@@ -33,6 +33,9 @@ STATUS_STYLE = {
 # Declared up front so the live table shows the whole pipeline immediately,
 # not just the stages that have emitted an event yet.
 STAGE_ORDER = [
+    "radar.trends",
+    "analyst.patterns",
+    "strategist.brief",
     "ugc.script",
     "ugc.voiceover",
     "ugc.broll",

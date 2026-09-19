@@ -36,6 +36,9 @@ class Config:
     # YouTube Data API v3 (free quota). https://console.cloud.google.com
     youtube_client_secrets_file: str | None = _env("YOUTUBE_CLIENT_SECRETS_FILE")
     youtube_token_file: str = os.environ.get("YOUTUBE_TOKEN_FILE", ".secrets/youtube_token.json")
+    # Separate read-only API key for public endpoints (trending videos) --
+    # no OAuth needed, same free quota, same Cloud project as above.
+    youtube_api_key: str | None = _env("YOUTUBE_API_KEY")
 
     # TikTok Content Posting API (free developer account).
     # https://developers.tiktok.com
@@ -67,6 +70,10 @@ class Config:
         return self.youtube_client_secrets_file is not None
 
     @property
+    def has_youtube_api_key(self) -> bool:
+        return self.youtube_api_key is not None
+
+    @property
     def has_tiktok(self) -> bool:
         return self.tiktok_client_key is not None and self.tiktok_access_token is not None
 
@@ -78,6 +85,7 @@ class Config:
         return {
             "llm (Groq)": self.has_llm,
             "broll (Pexels)": self.has_pexels,
+            "radar:youtube_trending": self.has_youtube_api_key,
             "publish:youtube": self.has_youtube,
             "publish:tiktok": self.has_tiktok,
             "publish:instagram": self.has_instagram,
