@@ -23,6 +23,7 @@ const els = {
   tileWinning: document.getElementById('tile-winning'),
   pillYoutube: document.getElementById('pill-youtube'),
   pillGroq: document.getElementById('pill-groq'),
+  pillRender: document.getElementById('pill-render'),
   chart: document.getElementById('platform-chart'),
 };
 
@@ -92,6 +93,7 @@ function addItemRow(item) {
         <td class="status-${it.status}">${it.status}</td>
         <td>${it.hookScore ?? '—'}</td>
         <td>${it.engagement != null ? (it.engagement * 100).toFixed(2) + '%' : '—'}</td>
+        <td>${escapeHtml(it.video || '—')}</td>
       </tr>`
     )
     .join('');
@@ -131,6 +133,18 @@ async function processSignal(signal, productContext) {
   state.hookScores.push(qcResult.hookScore);
   log(`PUBLISHED: "${strategy.workingTitle}" (hook ${qcResult.hookScore})`, 'good');
 
+  const renderResult = await api('/api/render', { script, title: strategy.workingTitle });
+  let videoLabel;
+  if (renderResult.rendered) {
+    videoLabel = renderResult.mock ? `mock: ${renderResult.videoPath}` : renderResult.videoPath;
+    log(`  video rendered${renderResult.mock ? ' (mock)' : ''}: ${renderResult.videoPath}`, 'good');
+  } else if (renderResult.reason === 'not_configured') {
+    videoLabel = 'script-ready (no render service)';
+  } else {
+    videoLabel = 'render failed — script-ready';
+    log(`  video render failed, script still ready: ${renderResult.reason}`, 'warn');
+  }
+
   const { publishResults } = await api('/api/publish', { qcResult });
   for (const publishResult of publishResults) {
     const { metrics, engagementRate } = await api('/api/performance', { publishResult });
@@ -143,6 +157,7 @@ async function processSignal(signal, productContext) {
       status: 'published',
       hookScore: qcResult.hookScore,
       engagement: engagementRate,
+      video: videoLabel,
     });
   }
   renderTiles();
@@ -182,9 +197,12 @@ async function boot() {
     els.pillYoutube.classList.add(cfg.youtubeLive ? 'on' : 'off');
     els.pillGroq.textContent = cfg.groqLive ? 'Groq: live' : 'Groq: mocked (set GROQ_API_KEY)';
     els.pillGroq.classList.add(cfg.groqLive ? 'on' : 'off');
+    els.pillRender.textContent = cfg.renderConfigured ? 'Render: connected' : 'Render: not set up';
+    els.pillRender.classList.add(cfg.renderConfigured ? 'on' : 'off');
   } catch {
     els.pillYoutube.textContent = 'YouTube: unknown';
     els.pillGroq.textContent = 'Groq: unknown';
+    els.pillRender.textContent = 'Render: unknown';
   }
 
   renderChart();

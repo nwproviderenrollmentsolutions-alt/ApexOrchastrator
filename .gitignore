@@ -5,3 +5,7 @@ __pycache__/
 .env
 node_modules/
 web/.env
+render/.env
+render/assets/*
+!render/assets/.gitkeep
+render/output/

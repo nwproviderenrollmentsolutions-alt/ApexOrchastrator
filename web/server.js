@@ -14,6 +14,7 @@ import { measure, engagementRate } from './lib/stages/performance.js';
 import { LearningDatabase } from './lib/stages/learning.js';
 import * as youtube from './lib/youtube.js';
 import * as groq from './lib/groq.js';
+import * as renderService from './lib/renderService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +27,11 @@ const radar = new ViralRadar();
 const learningDb = new LearningDatabase();
 
 app.get('/api/config', (req, res) => {
-  res.json({ youtubeLive: youtube.isConfigured(), groqLive: groq.isConfigured() });
+  res.json({
+    youtubeLive: youtube.isConfigured(),
+    groqLive: groq.isConfigured(),
+    renderConfigured: renderService.isConfigured(),
+  });
 });
 
 app.post('/api/scan', async (req, res) => {
@@ -102,6 +107,22 @@ app.post('/api/learn', (req, res) => {
   res.json({ record, boostedTopics: radar.boostedTopics, winningTopics: learningDb.winningTopics() });
 });
 
+app.post('/api/render', async (req, res) => {
+  const { script, title } = req.body || {};
+  if (!script) return res.status(400).json({ error: 'script is required' });
+
+  if (!renderService.isConfigured()) {
+    return res.json({ rendered: false, reason: 'not_configured', videoPath: null });
+  }
+  try {
+    const result = await renderService.renderVideo({ script, title });
+    res.json({ rendered: true, videoPath: result.videoPath, mock: result.mock, tookSeconds: result.tookSeconds });
+  } catch (err) {
+    console.warn(`[render] ${err.message}`);
+    res.json({ rendered: false, reason: err.message, videoPath: null });
+  }
+});
+
 app.get('/api/state', (req, res) => {
   res.json({
     boostedTopics: radar.boostedTopics,
@@ -115,4 +136,7 @@ app.listen(settings.port, () => {
   console.log(`ApexOrchastrator dashboard running at http://localhost:${settings.port}`);
   console.log(`YouTube live trends: ${youtube.isConfigured() ? 'ON' : 'off (set YOUTUBE_API_KEY in web/.env)'}`);
   console.log(`Groq live AI: ${groq.isConfigured() ? 'ON' : 'off (set GROQ_API_KEY in web/.env)'}`);
+  console.log(
+    `Render service: ${renderService.isConfigured() ? `ON (${settings.renderServiceUrl})` : 'off (set RENDER_SERVICE_URL in web/.env, see render/README.md)'}`
+  );
 });

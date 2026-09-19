@@ -30,5 +30,6 @@ export const settings = {
   youtubeRegion: process.env.YOUTUBE_REGION || 'US',
   groqApiKey: process.env.GROQ_API_KEY || null,
   groqModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+  renderServiceUrl: process.env.RENDER_SERVICE_URL || null,
   port: Number(process.env.PORT) || 3000,
 };

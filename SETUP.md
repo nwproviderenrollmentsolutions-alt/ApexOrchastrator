@@ -78,3 +78,12 @@ mocked RNG paths, not live LLM/YouTube results.
 If a live call fails (rate limit, bad key, network), it logs a warning
 (console/stderr) and falls back to mocked data for that item — a bad key
 never crashes a run, in either surface.
+
+## 5. (Optional) Render videos in your own cloned avatar/voice
+
+`render/` renders each approved script as a video in **your** voice and
+face — free, open-source (Coqui XTTS-v2 + SadTalker), no paid API, but it
+needs a GPU machine and real setup: full steps in
+[render/README.md](render/README.md). It's decoupled from `web/` — without
+it, the dashboard still runs end to end and just marks items
+"script-ready, render pending."

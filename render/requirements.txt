@@ -1,0 +1,12 @@
+# Run on your GPU machine. Real inference (voice cloning + lip-synced video)
+# needs a CUDA-capable GPU; CPU works but is very slow (minutes per second
+# of output video). See README.md for full setup including SadTalker.
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-dotenv>=1.0
+
+# Voice cloning (XTTS-v2). Pulls in torch -- prefer installing torch first
+# with the CUDA build matching your GPU (see https://pytorch.org/get-started/locally/),
+# then `pip install -r requirements.txt` so this doesn't grab a CPU-only wheel.
+coqui-tts>=0.25

@@ -7,7 +7,8 @@ what worked back into the next scan.
 
 ```
 Viral Radar -> Viral Analyst AI -> Content Strategist -> UGC Creator AI
-  -> Quality Control -> [TikTok/Reels, YouTube Shorts] -> Performance Engine
+  -> Quality Control -> Render (your cloned avatar/voice)
+  -> [TikTok/Reels, YouTube Shorts] -> Performance Engine
   -> Learning Database -> (loops back to) Viral Radar
 ```
 
@@ -37,10 +38,23 @@ Open http://localhost:3000 and click **Run cycle**. Structure:
 - `web/lib/stages/` — one module per box in the pipeline diagram
 - `web/lib/groq.js` — Groq (free-tier LLM) client
 - `web/lib/youtube.js` — YouTube Data API v3 client
+- `web/lib/renderService.js` — client for the render service (below)
 - `web/public/` — the dashboard: `app.js` drives the API in sequence and
   renders live stat tiles, a platform-views chart, an activity log, and a
   recent-items table
 - `web/test/` — `node --test` suite covering the stage chain and fallbacks
+
+## Render service (your cloned avatar + voice)
+
+`render/` is a separate Python service, run on your own GPU machine, that
+turns an approved script into a talking-head video in **your own** cloned
+voice and face — free and open-source (Coqui XTTS-v2 + SadTalker), no
+random avatar picker, no paid avatar-cloning API. Full setup:
+[render/README.md](render/README.md).
+
+It's optional and decoupled: without it, the dashboard still runs end to
+end and just marks each approved item "script-ready, render pending"
+instead of producing a video.
 
 ## Python CLI
 

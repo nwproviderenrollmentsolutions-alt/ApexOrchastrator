@@ -57,8 +57,11 @@ export class ViralRadar {
   }
 
   async scanYoutubeLive(limit) {
+    // Always search a topic from our own pool -- never a bare "#shorts",
+    // which pulls whatever's globally trending (pranks, sibling content,
+    // anything) regardless of relevance to what we're actually promoting.
     const pool = [...this.boostedTopics, ...TOPICS];
-    const query = Math.random() < 0.5 ? pick(pool) : '#shorts';
+    const query = pick(pool);
     const items = await youtube.fetchTrendingShorts({ maxResults: limit, query });
     const now = Date.now();
 
