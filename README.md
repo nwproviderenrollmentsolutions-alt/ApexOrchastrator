@@ -1,5 +1,7 @@
 # ApexOrchastrator
 
+[![tests](https://github.com/nwproviderenrollmentsolutions-alt/ApexOrchastrator/actions/workflows/tests.yml/badge.svg)](https://github.com/nwproviderenrollmentsolutions-alt/ApexOrchastrator/actions/workflows/tests.yml)
+
 Faceless short-form content automation, built entirely on free-tier services —
 the full loop, all 8 stages:
 
@@ -88,6 +90,15 @@ quality (real script/analysis instead of heuristics, real stock footage instead
 of placeholders, real trending titles instead of an offline fallback); the
 publish keys are only needed once you're ready to actually post.
 
+Then check your setup before spending any API calls:
+
+```bash
+python -m apex_orchestrator.cli --doctor
+```
+
+This validates required packages, ffmpeg, and a writable `runs/` directory,
+and reports which integrations are configured — all with zero network calls.
+
 ## Running it
 
 Full loop, starting from trend research:
@@ -153,16 +164,18 @@ apex_orchestrator/
   google_auth.py               # shared YouTube OAuth (upload + analytics scopes)
   pipeline.py                   # top-level orchestrator: run_pipeline() / run_full_pipeline() / collect_performance_for_run()
   cli.py                         # entrypoint
-  dashboard.py                    # FastAPI live dashboard
-  viral_radar/                     # Google Trends + YouTube trending signals
-  viral_analyst/                    # trend-title analysis -> hook/framework/CTA takeaways
-  content_strategist/                # framework selection (Analyst take, or Learning DB override) -> ContentBrief
-  ugc_creator/                        # script, voiceover, broll, captions, ffmpeg assembly
-  quality_control/                     # hook score, brand safety, disclosure, copyright
-  publish/                              # youtube / tiktok / instagram clients
-  performance_engine/                    # youtube / tiktok / instagram analytics fetchers
-  learning_database/                      # SQLite store + framework leaderboard
-tests/                                     # offline-testable logic (no network/ffmpeg/keys needed)
+  doctor.py                       # `--doctor`: local setup validation, zero network calls
+  dashboard.py                     # FastAPI live dashboard
+  viral_radar/                      # Google Trends + YouTube trending signals
+  viral_analyst/                     # trend-title analysis -> hook/framework/CTA takeaways
+  content_strategist/                 # framework selection (Analyst take, or Learning DB override) -> ContentBrief
+  ugc_creator/                         # script, voiceover, broll, captions, ffmpeg assembly
+  quality_control/                      # hook score, brand safety, disclosure, copyright
+  publish/                               # youtube / tiktok / instagram clients
+  performance_engine/                     # youtube / tiktok / instagram analytics fetchers
+  learning_database/                       # SQLite store + framework leaderboard
+tests/                                      # all offline: mocked HTTP, no real network/ffmpeg/keys needed
+.github/workflows/tests.yml                  # CI: runs the full test suite on every push/PR
 ```
 
 ## Notes on the publish stage

@@ -19,6 +19,10 @@ analytics (hours/days later, not immediately), close the loop:
     python -m apex_orchestrator.cli --collect-performance <run_id>
 This runs Performance Engine -> Learning Database, so future --niche runs
 in the same niche can learn which framework performed best.
+
+Before any of the above, check your local setup with zero network calls
+and zero API spend:
+    python -m apex_orchestrator.cli --doctor
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ from rich.console import Console
 
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.contracts import ContentBrief
+from apex_orchestrator.doctor import run_doctor
 from apex_orchestrator.pipeline import collect_performance_for_run, run_full_pipeline, run_pipeline
 
 console = Console()
@@ -75,7 +80,15 @@ def main() -> None:
         metavar="RUN_ID",
         help="Performance Engine -> Learning Database for a run that already published",
     )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="validate local setup (packages, ffmpeg, config) with zero network calls, then exit",
+    )
     args = parser.parse_args()
+
+    if args.doctor:
+        sys.exit(0 if run_doctor() else 1)
 
     if args.collect_performance:
         snapshots = collect_performance_for_run(args.collect_performance)
@@ -85,7 +98,7 @@ def main() -> None:
         return
 
     if not (args.niche or args.brief or args.topic):
-        console.print("[red]One of --niche, --brief, --topic, or --collect-performance is required.[/red]")
+        console.print("[red]One of --niche, --brief, --topic, --collect-performance, or --doctor is required.[/red]")
         sys.exit(1)
 
     console.print("[bold]Active integrations:[/bold]")
