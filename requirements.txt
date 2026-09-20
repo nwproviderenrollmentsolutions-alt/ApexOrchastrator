@@ -8,4 +8,6 @@ uvicorn>=0.29
 google-api-python-client>=2.120
 google-auth-oauthlib>=1.2
 google-auth-httplib2>=0.2
+cryptography>=42.0
+cffi>=1.16
 pytest>=8.0
