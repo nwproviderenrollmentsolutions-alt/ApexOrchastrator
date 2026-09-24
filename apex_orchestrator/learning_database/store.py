@@ -121,3 +121,21 @@ def best_framework_for_niche(niche: str, min_samples: int = 2, db_path: Path | N
         if count >= min_samples:
             return framework
     return None
+
+
+def niche_average_views(niche: str, db_path: Path | None = None) -> float | None:
+    """Average views across every recorded post for this niche, regardless
+    of framework -- the coarse "has this niche actually earned views"
+    signal Viral Radar uses to prioritize which niche to research next.
+    Returns None when there's no recorded performance for it yet.
+    """
+    with _connect(db_path or default_db_path()) as conn:
+        avg_views, count = conn.execute(
+            """
+            SELECT AVG(p.views), COUNT(*)
+            FROM runs r JOIN performance p ON r.run_id = p.run_id
+            WHERE r.niche = ?
+            """,
+            (niche,),
+        ).fetchone()
+    return avg_views if count else None

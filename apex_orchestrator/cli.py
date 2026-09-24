@@ -4,6 +4,13 @@ Full loop, starting from Viral Radar:
     python -m apex_orchestrator.cli --niche "budget travel" --product "..." \\
         --cta "..." --platforms youtube_shorts,tiktok
 
+Let Viral Radar pick which of several candidate niches to research, by
+blending fresh trend velocity with the Learning Database's historical
+performance for each (falls back to trend velocity alone until there's
+enough history):
+    python -m apex_orchestrator.cli --niches "budget travel,personal finance,productivity hacks" \\
+        --cta "..." --platforms youtube_shorts,tiktok
+
 Skip straight to UGC Creator with a hand-built brief:
     python -m apex_orchestrator.cli --topic "..." --angle "..." --cta "..." \\
         --platforms youtube_shorts,tiktok
@@ -38,7 +45,12 @@ from rich.console import Console
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.contracts import ContentBrief
 from apex_orchestrator.doctor import run_doctor
-from apex_orchestrator.pipeline import collect_performance_for_run, run_full_pipeline, run_pipeline
+from apex_orchestrator.pipeline import (
+    collect_performance_for_run,
+    run_full_pipeline,
+    run_full_pipeline_from_candidates,
+    run_pipeline,
+)
 
 console = Console()
 
@@ -65,6 +77,10 @@ def _load_brief(args: argparse.Namespace) -> ContentBrief:
 def main() -> None:
     parser = argparse.ArgumentParser(description="ApexOrchastrator: Viral Radar -> ... -> Publish")
     parser.add_argument("--niche", help="run the full loop starting at Viral Radar, e.g. 'budget travel'")
+    parser.add_argument(
+        "--niches",
+        help="comma-separated candidate niches -- Viral Radar ranks them (trend velocity + Learning Database history) and only researches the winner",
+    )
     parser.add_argument("--brief", help="path to a ContentBrief JSON file (skips Radar/Analyst/Strategist)")
     parser.add_argument("--topic", help="build a brief directly (skips Radar/Analyst/Strategist)")
     parser.add_argument("--angle", help="only used with --topic")
@@ -97,8 +113,8 @@ def main() -> None:
             console.print(f"  {s.platform}: views={s.views} shares={s.shares} saves={s.saves} comments={s.comments}")
         return
 
-    if not (args.niche or args.brief or args.topic):
-        console.print("[red]One of --niche, --brief, --topic, --collect-performance, or --doctor is required.[/red]")
+    if not (args.niche or args.niches or args.brief or args.topic):
+        console.print("[red]One of --niche, --niches, --brief, --topic, --collect-performance, or --doctor is required.[/red]")
         sys.exit(1)
 
     console.print("[bold]Active integrations:[/bold]")
@@ -106,7 +122,18 @@ def main() -> None:
         console.print(f"  {'[green]on[/green] ' if active else '[dim]off[/dim]'} {name}")
     console.print()
 
-    if args.niche:
+    if args.niches:
+        result = run_full_pipeline_from_candidates(
+            [n.strip() for n in args.niches.split(",") if n.strip()],
+            product_name=args.product,
+            cta=args.cta,
+            platforms=args.platforms.split(",") if args.platforms else None,
+            key_claims=args.claims.split("|") if args.claims else None,
+            disclosure_required=args.disclosure,
+            max_duration_sec=args.max_duration,
+            skip_qc_gate=args.skip_qc_gate,
+        )
+    elif args.niche:
         result = run_full_pipeline(
             args.niche,
             product_name=args.product,
@@ -120,6 +147,14 @@ def main() -> None:
     else:
         brief = _load_brief(args)
         result = run_pipeline(brief, skip_qc_gate=args.skip_qc_gate)
+
+    if result.niche_candidates:
+        console.print("[bold]Niche ranking:[/bold]")
+        for c in result.niche_candidates:
+            marker = "-> " if c.niche == result.niche else "   "
+            history = f"{c.historical_avg_views:.0f} avg views" if c.historical_avg_views is not None else "no history yet"
+            console.print(f"  {marker}{c.niche}: score={c.composite_score:.2f} (trend={c.trend_velocity:.2f}, {history})")
+        console.print()
 
     console.print()
     console.print(f"[bold]Run {result.run_id}[/bold] -- events at runs/{result.run_id}/events.jsonl")
@@ -137,6 +172,7 @@ def main() -> None:
                 "qc_report": asdict(result.qc_report),
                 "publish_results": [asdict(p) for p in result.publish_results],
                 "video_path": result.asset.video_path,
+                "niche_candidates": [asdict(c) for c in result.niche_candidates] if result.niche_candidates else None,
             },
             f,
             indent=2,

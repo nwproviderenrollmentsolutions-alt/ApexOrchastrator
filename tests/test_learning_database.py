@@ -52,3 +52,32 @@ def test_leaderboard_scoped_by_niche(tmp_path):
 
     board = store.framework_leaderboard("budget travel", db_path=db_path)
     assert [row[0] for row in board] == ["listicle"]
+
+
+def test_niche_average_views_none_for_unknown_niche(tmp_path):
+    db_path = tmp_path / "learning.db"
+    assert store.niche_average_views("budget travel", db_path=db_path) is None
+
+
+def test_niche_average_views_averages_across_frameworks(tmp_path):
+    db_path = tmp_path / "learning.db"
+
+    store.record_run("run1", "budget travel", "listicle", "brief1", db_path=db_path)
+    store.record_performance("run1", [_snapshot(1000)], db_path=db_path)
+
+    store.record_run("run2", "budget travel", "storytime", "brief2", db_path=db_path)
+    store.record_performance("run2", [_snapshot(3000)], db_path=db_path)
+
+    assert store.niche_average_views("budget travel", db_path=db_path) == 2000.0
+
+
+def test_niche_average_views_scoped_by_niche(tmp_path):
+    db_path = tmp_path / "learning.db"
+
+    store.record_run("run1", "budget travel", "listicle", "brief1", db_path=db_path)
+    store.record_performance("run1", [_snapshot(1000)], db_path=db_path)
+
+    store.record_run("run2", "personal finance", "storytime", "brief2", db_path=db_path)
+    store.record_performance("run2", [_snapshot(9000)], db_path=db_path)
+
+    assert store.niche_average_views("budget travel", db_path=db_path) == 1000.0

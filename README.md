@@ -15,7 +15,11 @@ Given a niche (e.g. `"budget travel"`):
 
 1. **Viral Radar** — pulls a trend velocity signal from Google Trends (free,
    no key) and, if configured, real trending-video titles from YouTube's free
-   public API, for that niche.
+   public API, for that niche. Given *several* candidate niches instead of
+   one, it ranks them by blending fresh trend velocity with the Learning
+   Database's historical performance for each, and only the winner proceeds
+   — the Learning Database → Viral Radar feedback loop, deciding *what to
+   research* rather than just how to frame it (see **Running it**).
 2. **Viral Analyst AI** — turns those titles into a concrete take: dominant
    hook pattern, content framework (listicle / myth-vs-fact / tutorial /
    storytime / before-after / problem-agitate-solve), editing notes, CTA
@@ -35,9 +39,11 @@ Given a niche (e.g. `"budget travel"`):
    views/watch-time/shares/saves/comments from each platform's free analytics
    endpoint for a post that already published.
 8. **Learning Database** — records every run and its performance in a local
-   SQLite database, and once a framework has enough data points for a niche,
-   Content Strategist starts preferring it over the Analyst's title-pattern
-   guess. This is the feedback loop that closes the pipeline.
+   SQLite database. It feeds back into the pipeline two ways: once a
+   framework has enough data points for a niche, Content Strategist starts
+   preferring it over the Analyst's title-pattern guess (step 3); and when
+   Viral Radar is given multiple candidate niches, their historical average
+   views factor directly into which one gets researched next (step 1).
 
 You can also skip straight to step 4 with a hand-written brief (see
 **Running it** below) if you don't want automated trend research.
@@ -110,6 +116,22 @@ python -m apex_orchestrator.cli \
   --cta "Follow for part 2" \
   --platforms youtube_shorts,tiktok
 ```
+
+Or let Viral Radar pick which of several candidate niches is worth researching,
+weighing fresh trend velocity against each niche's track record in the Learning
+Database (a niche with no history yet still gets a fair shot — see
+`viral_radar/pipeline.py`'s `rank_niches`):
+
+```bash
+python -m apex_orchestrator.cli \
+  --niches "budget travel,personal finance,productivity hacks" \
+  --cta "Follow for part 2" \
+  --platforms youtube_shorts,tiktok
+```
+
+This prints the full ranking (score, trend velocity, historical views per
+candidate) before proceeding with the winner, and records it in that run's
+`summary.json`.
 
 Or skip Radar/Analyst/Strategist with a hand-built brief:
 
@@ -200,7 +222,9 @@ content — a deeper version could download and watch top-performing videos
 (e.g. with `yt-dlp` + Whisper, similar to this environment's `watch` skill) for
 real hook/pacing/editing breakdowns instead of title-pattern inference.
 
-Learning Database currently only feeds framework choice back into Content
-Strategist. It could also inform Viral Radar directly (e.g. deprioritize
-niches with consistently weak performance) — the data's already there in
-`runs/learning.db`, just not consumed by that stage yet.
+Niche ranking (`rank_niches`) only uses raw average views as the historical
+signal. It doesn't yet weight by recency (a niche that performed well two
+months ago is treated the same as one that performed well yesterday) or by
+sample size beyond the framework leaderboard's own `min_samples` gate --
+both are natural next refinements once there's enough real run history to
+make them meaningful.

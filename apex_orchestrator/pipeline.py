@@ -1,11 +1,18 @@
 """Top-level orchestrator.
 
-Two entry points to generate + publish content:
+Three entry points to generate + publish content:
 - `run_pipeline(brief)`: ContentBrief -> UGC Creator -> QC -> Publish. Use
   this when you already have a brief (hand-written, loaded from JSON, or
   from your own upstream stage).
-- `run_full_pipeline(niche, ...)`: the whole loop, Viral Radar -> Viral
-  Analyst AI -> Content Strategist -> [same three stages as above].
+- `run_full_pipeline(niche, ...)`: the whole loop for one fixed niche,
+  Viral Radar -> Viral Analyst AI -> Content Strategist -> [same three
+  stages as above].
+- `run_full_pipeline_from_candidates(candidate_niches, ...)`: same, but
+  Viral Radar first ranks several candidate niches -- blending fresh trend
+  velocity with the Learning Database's historical performance for each --
+  and only researches/scripts/publishes the winner. This is the Learning
+  Database -> Viral Radar feedback loop from the architecture diagram:
+  which niche to work on next, not just how to frame it once chosen.
 
 Plus one to close the loop after the fact:
 - `collect_performance_for_run(run_id)`: Performance Engine -> Learning
@@ -26,7 +33,14 @@ from pathlib import Path
 
 from apex_orchestrator.config import CONFIG
 from apex_orchestrator.content_strategist.pipeline import run_content_strategist
-from apex_orchestrator.contracts import ContentBrief, PerformanceSnapshot, PublishResult, QCReport, RenderedAsset
+from apex_orchestrator.contracts import (
+    ContentBrief,
+    PerformanceSnapshot,
+    PublishResult,
+    QCReport,
+    RenderedAsset,
+    TrendSignal,
+)
 from apex_orchestrator.events import EventBus
 from apex_orchestrator.learning_database.pipeline import run_learning_database
 from apex_orchestrator.performance_engine.pipeline import run_performance_engine
@@ -34,7 +48,7 @@ from apex_orchestrator.publish.pipeline import run_publish
 from apex_orchestrator.quality_control.pipeline import run_quality_control
 from apex_orchestrator.ugc_creator.pipeline import run_ugc_creator
 from apex_orchestrator.viral_analyst.pipeline import run_viral_analyst
-from apex_orchestrator.viral_radar.pipeline import run_viral_radar
+from apex_orchestrator.viral_radar.pipeline import NicheCandidate, rank_niches, run_viral_radar
 
 
 @dataclass
@@ -46,6 +60,7 @@ class PipelineResult:
     run_id: str
     niche: str
     framework: str
+    niche_candidates: list[NicheCandidate] | None = None
 
 
 def _execute_from_brief(brief: ContentBrief, framework: str, bus: EventBus, skip_qc_gate: bool) -> PipelineResult:
@@ -89,6 +104,38 @@ def run_pipeline(brief: ContentBrief, skip_qc_gate: bool = False) -> PipelineRes
         bus.stop()
 
 
+def _run_from_niche_and_signals(
+    niche: str,
+    signals: list[TrendSignal],
+    bus: EventBus,
+    *,
+    product_name: str | None = None,
+    cta: str | None = None,
+    platforms: list[str] | None = None,
+    key_claims: list[str] | None = None,
+    disclosure_required: bool = False,
+    max_duration_sec: int = 45,
+    skip_qc_gate: bool = False,
+    niche_candidates: list[NicheCandidate] | None = None,
+) -> PipelineResult:
+    analysis = run_viral_analyst(niche, signals, bus)
+    brief, framework = run_content_strategist(
+        uuid.uuid4().hex[:8],
+        niche,
+        analysis,
+        bus,
+        product_name=product_name,
+        cta=cta,
+        platforms=platforms,
+        key_claims=key_claims,
+        disclosure_required=disclosure_required,
+        max_duration_sec=max_duration_sec,
+    )
+    result = _execute_from_brief(brief, framework, bus, skip_qc_gate)
+    result.niche_candidates = niche_candidates
+    return result
+
+
 def run_full_pipeline(
     niche: str,
     *,
@@ -103,11 +150,9 @@ def run_full_pipeline(
     bus = EventBus()
     try:
         signals = run_viral_radar(niche, bus)
-        analysis = run_viral_analyst(niche, signals, bus)
-        brief, framework = run_content_strategist(
-            uuid.uuid4().hex[:8],
+        return _run_from_niche_and_signals(
             niche,
-            analysis,
+            signals,
             bus,
             product_name=product_name,
             cta=cta,
@@ -115,8 +160,47 @@ def run_full_pipeline(
             key_claims=key_claims,
             disclosure_required=disclosure_required,
             max_duration_sec=max_duration_sec,
+            skip_qc_gate=skip_qc_gate,
         )
-        return _execute_from_brief(brief, framework, bus, skip_qc_gate)
+    finally:
+        bus.stop()
+
+
+def run_full_pipeline_from_candidates(
+    candidate_niches: list[str],
+    *,
+    product_name: str | None = None,
+    cta: str | None = None,
+    platforms: list[str] | None = None,
+    key_claims: list[str] | None = None,
+    disclosure_required: bool = False,
+    max_duration_sec: int = 45,
+    skip_qc_gate: bool = False,
+) -> PipelineResult:
+    """Like `run_full_pipeline`, but Viral Radar picks the niche: it ranks
+    every candidate by blending fresh trend velocity with the Learning
+    Database's historical performance, and only the winner proceeds
+    through Analyst -> Strategist -> UGC Creator -> QC -> Publish. The
+    losing candidates' trend signals are still returned on the result
+    (`niche_candidates`) so the ranking is visible, not just its outcome.
+    """
+    bus = EventBus()
+    try:
+        candidates = rank_niches(candidate_niches, bus)
+        winner = candidates[0]
+        return _run_from_niche_and_signals(
+            winner.niche,
+            winner.signals,
+            bus,
+            product_name=product_name,
+            cta=cta,
+            platforms=platforms,
+            key_claims=key_claims,
+            disclosure_required=disclosure_required,
+            max_duration_sec=max_duration_sec,
+            skip_qc_gate=skip_qc_gate,
+            niche_candidates=candidates,
+        )
     finally:
         bus.stop()
 
